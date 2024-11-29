@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Gestion des Dons</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        input { padding: 8px; width: 200px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #searchInput { margin-bottom: 15px; width: 100%; }
+        button { padding: 8px 15px; margin-right: 10px; }
+        .loader { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Gestion des Dons</h2>
+        
+        <div class="form-group">
+            <input type="text" id="nomDonateur" placeholder="Nom du donateur">
+            <input type="number" id="montantDon" placeholder="Montant (DH)">
+            <button onclick="ajouterDon()">Ajouter</button>
+        </div>
+
+        <input type="text" id="searchInput" placeholder="Rechercher...">
+        <div class="loader">Chargement...</div>
+        
+        <table id="tableDons">
+            <thead>
+                <tr>
+                    <th>Nom</th>
+                    <th>Montant (DH)</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <button onclick="exporterExcel()">Exporter vers Excel</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Replace with your Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAbs8WO4lKAUUc8t_1_cZ883c3zs8UTeWU",
+            authDomain: "donationskahatain.firebaseapp.com",
+            projectId: "donationskahatain",
+            storageBucket: "donationskahatain.firebasestorage.app",
+            messagingSenderId: "722911853465",
+            appId: "1:722911853465:web:ab50ae12975a4b6a2a3108",
+            measurementId: "G-7LDN95JBDZ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        let dons = [];
+
+        async function chargerDons() {
+            $('.loader').show();
+            const q = query(collection(db, "dons"), orderBy("date", "desc"));
+            const querySnapshot = await getDocs(q);
+            dons = [];
+            querySnapshot.forEach((doc) => {
+                dons.push({ id: doc.id, ...doc.data() });
+            });
+            afficherDons();
+            $('.loader').hide();
+        }
+
+        window.ajouterDon = async function() {
+            const nom = $('#nomDonateur').val();
+            const montant = parseFloat($('#montantDon').val());
+            
+            if (!nom || !montant) {
+                alert('Veuillez remplir tous les champs');
+                return;
+            }
+
+            const don = {
+                nom: nom,
+                montant: montant,
+                date: new Date().toISOString(),
+                dateAffichage: new Date().toLocaleDateString()
+            };
+
+            try {
+                await addDoc(collection(db, "dons"), don);
+                await chargerDons();
+                $('#nomDonateur').val('');
+                $('#montantDon').val('');
+            } catch (e) {
+                console.error("Erreur lors de l'ajout:", e);
+                alert("Erreur lors de l'ajout du don");
+            }
+        }
+
+        function afficherDons(donsFiltres = dons) {
+            const tbody = $('#tableDons tbody');
+            tbody.empty();
+            
+            donsFiltres.forEach(don => {
+                tbody.append(`
+                    <tr>
+                        <td>${don.nom}</td>
+                        <td>${don.montant}</td>
+                        <td>${don.dateAffichage}</td>
+                    </tr>
+                `);
+            });
+        }
+
+        window.exporterExcel = function() {
+            const dataExport = dons.map(don => ({
+                Nom: don.nom,
+                Montant: don.montant,
+                Date: don.dateAffichage
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(dataExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Dons");
+            XLSX.writeFile(wb, "dons.xlsx");
+        }
+
+        $('#searchInput').on('keyup', function() {
+            const searchTerm = $(this).val().toLowerCase();
+            const donsFiltres = dons.filter(don => 
+                don.nom.toLowerCase().includes(searchTerm) ||
+                don.montant.toString().includes(searchTerm) ||
+                don.dateAffichage.toLowerCase().includes(searchTerm)
+            );
+            afficherDons(donsFiltres);
+        });
+
+        // Charger les dons au démarrage
+        chargerDons();
+    </script>
+</body>
+</html>
